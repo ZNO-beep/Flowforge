@@ -1,0 +1,318 @@
+import React from 'react';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
+import { Loader2, Plus, BarChart, Search, X, HelpCircle } from 'lucide-react';
+import { getTypeStyles } from './searchOperations';
+
+/**
+ * Header component for the OrgStructurePage
+ * @param {Object} props - Component props
+ * @returns {JSX.Element} Component JSX
+ */
+export const PageHeader = ({
+  setIsHelpDialogOpen,
+  showStats,
+  setShowStats,
+  setIsAddDeptDialogOpen,
+  fetchData,
+  loading
+}) => {
+  return (
+    <div className="flex justify-between items-center mb-6">
+      <div>
+        <h1 className="text-3xl font-bold">Organization Structure</h1>
+        <p className="text-gray-600 mt-2">
+          Visualize and manage your business organization structure
+        </p>
+      </div>
+      <div className="flex gap-2">
+        <Button 
+          onClick={() => setIsHelpDialogOpen(true)}
+          variant="ghost"
+          size="icon"
+          className="rounded-full"
+          title="Help"
+        >
+          <HelpCircle className="h-5 w-5" />
+        </Button>
+        <Button 
+          onClick={() => setShowStats(!showStats)}
+          variant="outline"
+          className="flex items-center gap-2"
+        >
+          <BarChart className="h-4 w-4" />
+          {showStats ? 'Hide Stats' : 'Show Stats'}
+        </Button>
+        <Button 
+          onClick={() => setIsAddDeptDialogOpen(true)}
+          className="flex items-center gap-2"
+        >
+          <Plus className="h-4 w-4" />
+          Add Department
+        </Button>
+        <Button 
+          onClick={fetchData} 
+          disabled={loading}
+          variant="outline"
+          className="flex items-center gap-2"
+        >
+          {loading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Refreshing...
+            </>
+          ) : (
+            'Refresh'
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Search bar component for the OrgStructurePage
+ * @param {Object} props - Component props
+ * @returns {JSX.Element} Component JSX
+ */
+export const SearchBar = ({
+  searchQuery,
+  setSearchQuery,
+  handleSearch,
+  clearSearch,
+  isSearching
+}) => {
+  return (
+    <div className="mb-6 flex gap-2">
+      <div className="relative flex-1">
+        <Input
+          placeholder="Search departments, roles, or functions..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+          className="pl-10"
+        />
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+        {searchQuery && (
+          <button 
+            onClick={clearSearch}
+            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+      <Button onClick={handleSearch} disabled={isSearching}>
+        {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
+      </Button>
+    </div>
+  );
+};
+
+/**
+ * Search results component for the OrgStructurePage
+ * @param {Object} props - Component props
+ * @returns {JSX.Element} Component JSX
+ */
+export const SearchResults = ({
+  searchResults,
+  clearSearch
+}) => {
+  if (searchResults.length === 0) return null;
+  
+  return (
+    <div className="mb-6 bg-white p-4 rounded-lg shadow-sm border">
+      <div className="flex justify-between items-center mb-3">
+        <h3 className="font-semibold">Search Results ({searchResults.length})</h3>
+        <Button variant="ghost" size="sm" onClick={clearSearch}>
+          Clear Results
+        </Button>
+      </div>
+      <div className="grid gap-2 max-h-[300px] overflow-y-auto">
+        {searchResults.map((item) => (
+          <div 
+            key={`${item.type}-${item.id}`} 
+            className={`p-3 rounded border ${getTypeStyles(item.type)} flex justify-between items-center`}
+          >
+            <div>
+              <div className="font-medium">{item.name}</div>
+              <div className="text-xs capitalize">{item.type}</div>
+              {item.description && (
+                <div className="text-xs mt-1 text-gray-600">{item.description}</div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Statistics component for the OrgStructurePage
+ * @param {Object} props - Component props
+ * @returns {JSX.Element} Component JSX
+ */
+export const Statistics = ({
+  stats,
+  showStats
+}) => {
+  if (!showStats) return null;
+  
+  return (
+    <div className="mb-6 bg-white p-4 rounded-lg shadow-sm border">
+      <h3 className="font-semibold mb-3">Organization Statistics</h3>
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+          <div className="text-3xl font-bold text-blue-700">{stats.departments}</div>
+          <div className="text-sm text-blue-600">Departments</div>
+        </div>
+        <div className="bg-green-50 p-4 rounded-lg border border-green-100">
+          <div className="text-3xl font-bold text-green-700">{stats.roles}</div>
+          <div className="text-sm text-green-600">Roles</div>
+        </div>
+        <div className="bg-amber-50 p-4 rounded-lg border border-amber-100">
+          <div className="text-3xl font-bold text-amber-700">{stats.functions}</div>
+          <div className="text-sm text-amber-600">Functions</div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Add Department Dialog component for the OrgStructurePage
+ * @param {Object} props - Component props
+ * @returns {JSX.Element} Component JSX
+ */
+export const AddDepartmentDialog = ({
+  isOpen,
+  onClose,
+  newDepartment,
+  setNewDepartment,
+  onAddDepartment,
+  isSubmitting
+}) => {
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Add New Department</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label htmlFor="name" className="text-right">
+              Name
+            </label>
+            <Input
+              id="name"
+              value={newDepartment.name}
+              onChange={(e) => setNewDepartment({ ...newDepartment, name: e.target.value })}
+              className="col-span-3"
+              placeholder="Enter department name"
+            />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label htmlFor="description" className="text-right">
+              Description
+            </label>
+            <Input
+              id="description"
+              value={newDepartment.description}
+              onChange={(e) => setNewDepartment({ ...newDepartment, description: e.target.value })}
+              className="col-span-3"
+              placeholder="Optional description"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button 
+            variant="outline" 
+            onClick={onClose} 
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={onAddDepartment} 
+            disabled={isSubmitting || !newDepartment.name.trim()}
+          >
+            {isSubmitting ? 'Adding...' : 'Add Department'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+/**
+ * Help Dialog component for the OrgStructurePage
+ * @param {Object} props - Component props
+ * @returns {JSX.Element} Component JSX
+ */
+export const HelpDialog = ({
+  isOpen,
+  onClose
+}) => {
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Organization Structure Help</DialogTitle>
+        </DialogHeader>
+        <div className="py-4 space-y-4">
+          <section>
+            <h3 className="text-lg font-semibold mb-2">Getting Started</h3>
+            <p>
+              The Organization Structure page allows you to visualize and manage your business's
+              organizational hierarchy, including departments, roles, and functions.
+            </p>
+          </section>
+          
+          <section>
+            <h3 className="text-lg font-semibold mb-2">Key Features</h3>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>View your organization's structure in a hierarchical flow chart</li>
+              <li>Add, edit, and delete departments, roles, and functions</li>
+              <li>Expand and collapse sections to focus on specific areas</li>
+              <li>Search for specific items across your organization</li>
+              <li>View statistics about your organizational structure</li>
+            </ul>
+          </section>
+          
+          <section>
+            <h3 className="text-lg font-semibold mb-2">Node Types</h3>
+            <div className="space-y-2">
+              <div className="flex items-center">
+                <div className="w-3 h-3 rounded-full bg-blue-500 mr-2"></div>
+                <span><strong>Departments:</strong> Top-level organizational units</span>
+              </div>
+              <div className="flex items-center">
+                <div className="w-3 h-3 rounded-full bg-green-500 mr-2"></div>
+                <span><strong>Roles:</strong> Positions within departments</span>
+              </div>
+              <div className="flex items-center">
+                <div className="w-3 h-3 rounded-full bg-amber-500 mr-2"></div>
+                <span><strong>Functions:</strong> Specific responsibilities within roles</span>
+              </div>
+            </div>
+          </section>
+          
+          <section>
+            <h3 className="text-lg font-semibold mb-2">Tips & Tricks</h3>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>Click the + button on a node to add a child item</li>
+              <li>Click the expand/collapse button to show or hide child items</li>
+              <li>Use the search bar to quickly find specific items</li>
+              <li>View statistics to get a high-level overview of your organization</li>
+            </ul>
+          </section>
+        </div>
+        <DialogFooter>
+          <Button onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}; 

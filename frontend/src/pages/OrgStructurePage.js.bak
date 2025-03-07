@@ -1,0 +1,475 @@
+import React, { useState, useEffect } from 'react';
+import OrgStructureFlow from '../components/OrgStructure/OrgStructureFlow';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
+import { Loader2, Plus, BarChart, Search, X, HelpCircle } from 'lucide-react';
+import { getDepartments, createDepartment, getRoles, getFunctions } from '../api/organization';
+
+/**
+ * OrgStructurePage component for displaying the organizational structure
+ * visualization and management interface.
+ */
+const OrgStructurePage = () => {
+  const [departments, setDepartments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isAddDeptDialogOpen, setIsAddDeptDialogOpen] = useState(false);
+  const [isHelpDialogOpen, setIsHelpDialogOpen] = useState(false);
+  const [newDepartment, setNewDepartment] = useState({ name: '', description: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [stats, setStats] = useState({ departments: 0, roles: 0, functions: 0 });
+  const [showStats, setShowStats] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [allItems, setAllItems] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await getDepartments();
+      setDepartments(data);
+      
+      // Fetch statistics
+      await fetchStats();
+      
+      // Fetch all items for search
+      await fetchAllItems();
+    } catch (err) {
+      console.error('Error fetching departments:', err);
+      setError('Failed to load organization structure. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const [departments, roles, functions] = await Promise.all([
+        getDepartments(),
+        getRoles(),
+        getFunctions()
+      ]);
+      
+      setStats({
+        departments: departments.length,
+        roles: roles.length,
+        functions: functions.length
+      });
+    } catch (err) {
+      console.error('Error fetching statistics:', err);
+    }
+  };
+
+  const fetchAllItems = async () => {
+    try {
+      const [departments, roles, functions] = await Promise.all([
+        getDepartments(),
+        getRoles(),
+        getFunctions()
+      ]);
+      
+      const items = [
+        ...departments.map(dept => ({ ...dept, type: 'department' })),
+        ...roles.map(role => ({ ...role, type: 'role' })),
+        ...functions.map(func => ({ ...func, type: 'function' }))
+      ];
+      
+      setAllItems(items);
+    } catch (err) {
+      console.error('Error fetching all items:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleAddDepartment = async () => {
+    if (!newDepartment.name.trim()) return;
+    
+    try {
+      setIsSubmitting(true);
+      const createdDept = await createDepartment({
+        name: newDepartment.name,
+        description: newDepartment.description
+      });
+      
+      if (createdDept) {
+        // Refresh the departments list
+        await fetchData();
+        setIsAddDeptDialogOpen(false);
+        setNewDepartment({ name: '', description: '' });
+      }
+    } catch (err) {
+      console.error('Error creating department:', err);
+      setError('Failed to create department. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSearch = () => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    
+    setIsSearching(true);
+    
+    const query = searchQuery.toLowerCase();
+    const results = allItems.filter(item => 
+      item.name.toLowerCase().includes(query) || 
+      (item.description && item.description.toLowerCase().includes(query))
+    );
+    
+    setSearchResults(results);
+    setIsSearching(false);
+  };
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    setSearchResults([]);
+  };
+
+  // Get type-specific styling
+  const getTypeStyles = (type) => {
+    switch (type) {
+      case 'department':
+        return 'bg-blue-100 text-blue-800 border-blue-300';
+      case 'role':
+        return 'bg-green-100 text-green-800 border-green-300';
+      case 'function':
+        return 'bg-amber-100 text-amber-800 border-amber-300';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-300';
+    }
+  };
+
+  return (
+    <div className="container mx-auto py-6">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-3xl font-bold">Organization Structure</h1>
+          <p className="text-gray-600 mt-2">
+            Visualize and manage your business organization structure
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button 
+            onClick={() => setIsHelpDialogOpen(true)}
+            variant="ghost"
+            size="icon"
+            className="rounded-full"
+            title="Help"
+          >
+            <HelpCircle className="h-5 w-5" />
+          </Button>
+          <Button 
+            onClick={() => setShowStats(!showStats)}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <BarChart className="h-4 w-4" />
+            {showStats ? 'Hide Stats' : 'Show Stats'}
+          </Button>
+          <Button 
+            onClick={() => setIsAddDeptDialogOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Add Department
+          </Button>
+          <Button 
+            onClick={fetchData} 
+            disabled={loading}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Refreshing...
+              </>
+            ) : (
+              'Refresh'
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {/* Search Bar */}
+      <div className="mb-6 flex gap-2">
+        <div className="relative flex-1">
+          <Input
+            placeholder="Search departments, roles, or functions..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            className="pl-10"
+          />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+          {searchQuery && (
+            <button 
+              onClick={clearSearch}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        <Button onClick={handleSearch} disabled={isSearching}>
+          {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
+        </Button>
+      </div>
+
+      {/* Search Results */}
+      {searchResults.length > 0 && (
+        <div className="mb-6 bg-white p-4 rounded-lg shadow-sm border">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="font-semibold">Search Results ({searchResults.length})</h3>
+            <Button variant="ghost" size="sm" onClick={clearSearch}>
+              Clear Results
+            </Button>
+          </div>
+          <div className="grid gap-2 max-h-[300px] overflow-y-auto">
+            {searchResults.map((item) => (
+              <div 
+                key={`${item.type}-${item.id}`} 
+                className={`p-3 rounded border ${getTypeStyles(item.type)} flex justify-between items-center`}
+              >
+                <div>
+                  <div className="font-medium">{item.name}</div>
+                  <div className="text-xs capitalize">{item.type}</div>
+                  {item.description && (
+                    <div className="text-xs mt-1 text-gray-600">{item.description}</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+          {error}
+        </div>
+      )}
+
+      {showStats && (
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+            <h3 className="text-lg font-semibold text-blue-800 mb-1">Departments</h3>
+            <p className="text-3xl font-bold text-blue-600">{stats.departments}</p>
+          </div>
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+            <h3 className="text-lg font-semibold text-green-800 mb-1">Roles</h3>
+            <p className="text-3xl font-bold text-green-600">{stats.roles}</p>
+          </div>
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
+            <h3 className="text-lg font-semibold text-amber-800 mb-1">Functions</h3>
+            <p className="text-3xl font-bold text-amber-600">{stats.functions}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white p-6 rounded-lg shadow-md">
+        {loading && departments.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-[600px]">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-4" />
+            <p className="text-gray-500">Loading organization structure...</p>
+          </div>
+        ) : departments.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-[400px] text-center">
+            <div className="bg-blue-50 p-4 rounded-full mb-4">
+              <Plus className="h-8 w-8 text-blue-500" />
+            </div>
+            <h3 className="text-xl font-semibold mb-2">No Departments Found</h3>
+            <p className="text-gray-600 max-w-md mb-6">
+              Your organization structure is empty. Start by adding a department to visualize your business structure.
+            </p>
+            <Button onClick={() => setIsAddDeptDialogOpen(true)}>
+              Add Your First Department
+            </Button>
+          </div>
+        ) : (
+          <>
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold mb-2">Departments, Roles, and Functions</h2>
+              <p className="text-gray-600">
+                Expand departments to see roles, and roles to see functions. Use the + button to add new items.
+              </p>
+            </div>
+            <OrgStructureFlow initialDepartments={departments} />
+          </>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+        <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
+          <h3 className="text-lg font-semibold text-blue-800 mb-2">Departments</h3>
+          <p className="text-gray-600">
+            Departments represent the main divisions of your organization. Each department contains roles.
+          </p>
+        </div>
+        <div className="bg-green-50 p-6 rounded-lg border border-green-200">
+          <h3 className="text-lg font-semibold text-green-800 mb-2">Roles</h3>
+          <p className="text-gray-600">
+            Roles are positions within departments. Each role is responsible for specific functions.
+          </p>
+        </div>
+        <div className="bg-amber-50 p-6 rounded-lg border border-amber-200">
+          <h3 className="text-lg font-semibold text-amber-800 mb-2">Functions</h3>
+          <p className="text-gray-600">
+            Functions are specific responsibilities or tasks that are performed by roles within your organization.
+          </p>
+        </div>
+      </div>
+
+      {/* Add Department Dialog */}
+      <Dialog open={isAddDeptDialogOpen} onOpenChange={setIsAddDeptDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Department</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <label htmlFor="dept-name" className="text-right">
+                Name
+              </label>
+              <Input
+                id="dept-name"
+                value={newDepartment.name}
+                onChange={(e) => setNewDepartment({ ...newDepartment, name: e.target.value })}
+                className="col-span-3"
+                placeholder="e.g. Marketing"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <label htmlFor="dept-desc" className="text-right">
+                Description
+              </label>
+              <Input
+                id="dept-desc"
+                value={newDepartment.description}
+                onChange={(e) => setNewDepartment({ ...newDepartment, description: e.target.value })}
+                className="col-span-3"
+                placeholder="Optional description"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setIsAddDeptDialogOpen(false);
+                setNewDepartment({ name: '', description: '' });
+              }} 
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleAddDepartment} 
+              disabled={isSubmitting || !newDepartment.name.trim()}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                'Create Department'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Help Dialog */}
+      <Dialog open={isHelpDialogOpen} onOpenChange={setIsHelpDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Organization Structure Help</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 max-h-[70vh] overflow-y-auto">
+            <div className="space-y-6">
+              <section>
+                <h3 className="text-lg font-semibold mb-2">Getting Started</h3>
+                <p className="text-gray-700 mb-2">
+                  The Organization Structure feature helps you visualize and manage your business's departments, roles, and functions in a hierarchical view.
+                </p>
+                <p className="text-gray-700">
+                  Start by adding departments, then expand them to add roles, and expand roles to add functions.
+                </p>
+              </section>
+
+              <section>
+                <h3 className="text-lg font-semibold mb-2">Key Features</h3>
+                <ul className="list-disc pl-5 space-y-2 text-gray-700">
+                  <li><strong>Add Departments</strong> - Use the "Add Department" button to create top-level organizational units.</li>
+                  <li><strong>Expand/Collapse</strong> - Click the arrow icon on a node to expand or collapse its children.</li>
+                  <li><strong>Add Child Items</strong> - Use the "+" button on a department to add roles, or on a role to add functions.</li>
+                  <li><strong>Edit Items</strong> - Click the pencil icon to edit a department, role, or function.</li>
+                  <li><strong>Delete Items</strong> - Click the trash icon to delete a department, role, or function (and all its children).</li>
+                  <li><strong>View Details</strong> - Hover over the info icon to see more details about an item.</li>
+                  <li><strong>Search</strong> - Use the search bar to find specific departments, roles, or functions.</li>
+                  <li><strong>Statistics</strong> - Toggle the stats view to see counts of departments, roles, and functions.</li>
+                </ul>
+              </section>
+
+              <section>
+                <h3 className="text-lg font-semibold mb-2">Node Types</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="p-3 bg-blue-100 border border-blue-300 rounded">
+                    <h4 className="font-medium mb-1">Departments</h4>
+                    <p className="text-sm text-gray-700">Top-level organizational units (e.g., Marketing, Sales)</p>
+                  </div>
+                  <div className="p-3 bg-green-100 border border-green-300 rounded">
+                    <h4 className="font-medium mb-1">Roles</h4>
+                    <p className="text-sm text-gray-700">Positions within departments (e.g., Manager, Specialist)</p>
+                  </div>
+                  <div className="p-3 bg-amber-100 border border-amber-300 rounded">
+                    <h4 className="font-medium mb-1">Functions</h4>
+                    <p className="text-sm text-gray-700">Specific responsibilities of roles (e.g., Content Creation, Lead Generation)</p>
+                  </div>
+                </div>
+              </section>
+
+              <section>
+                <h3 className="text-lg font-semibold mb-2">Tips & Tricks</h3>
+                <ul className="list-disc pl-5 space-y-2 text-gray-700">
+                  <li>Create a logical hierarchy that reflects your actual business structure.</li>
+                  <li>Use descriptive names and add detailed descriptions for clarity.</li>
+                  <li>Regularly update your organizational structure as your business evolves.</li>
+                  <li>Use the search feature to quickly find specific items in large organizations.</li>
+                  <li>Expand only the sections you're currently working with to keep the view manageable.</li>
+                </ul>
+              </section>
+
+              <section>
+                <h3 className="text-lg font-semibold mb-2">Keyboard Shortcuts</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-2 border rounded">
+                    <span className="font-mono bg-gray-100 px-1 rounded">Enter</span> - Execute search
+                  </div>
+                  <div className="p-2 border rounded">
+                    <span className="font-mono bg-gray-100 px-1 rounded">Esc</span> - Close dialogs
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setIsHelpDialogOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+export default OrgStructurePage; 

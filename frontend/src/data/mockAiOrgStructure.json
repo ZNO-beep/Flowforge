@@ -1,0 +1,159 @@
+{
+  "id": "org-root",
+  "name": "Prestige Real Estate",
+  "type": "organization",
+  "description": "Real Estate Agency",
+  "isExpanded": true,
+  "children": [
+    {
+      "id": "dept-sales",
+      "name": "Sales Department",
+      "type": "department",
+      "description": "Sales and business development",
+      "isExpanded": true,
+      "children": [
+        {
+          "id": "role-sales-director",
+          "name": "Sales Director",
+          "type": "role",
+          "description": "Head of Sales",
+          "responsibilities": ["Sales strategy", "Team management"],
+          "isExpanded": true,
+          "children": [
+            {
+              "id": "role-sales-manager",
+              "name": "Sales Manager",
+              "type": "role",
+              "description": "Manages sales team",
+              "responsibilities": ["Team leadership", "Performance tracking"],
+              "isExpanded": true,
+              "children": [
+                {
+                  "id": "role-listing-agent",
+                  "name": "Listing Agent",
+                  "type": "role",
+                  "description": "Handles property listings",
+                  "responsibilities": ["Property valuation", "Seller relations"],
+                  "children": []
+                },
+                {
+                  "id": "role-buyers-agent",
+                  "name": "Buyer's Agent",
+                  "type": "role",
+                  "description": "Works with property buyers",
+                  "responsibilities": ["Property showings", "Buyer relations"],
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dept-marketing",
+      "name": "Marketing Department",
+      "type": "department",
+      "description": "Marketing and brand management",
+      "isExpanded": true,
+      "children": [
+        {
+          "id": "role-marketing-director",
+          "name": "Marketing Director",
+          "type": "role",
+          "description": "Head of Marketing",
+          "responsibilities": ["Marketing strategy", "Brand management"],
+          "isExpanded": true,
+          "children": [
+            {
+              "id": "role-content-writer",
+              "name": "Content Writer",
+              "type": "role",
+              "description": "Content creation specialist",
+              "responsibilities": ["Blog posts", "Email campaigns"],
+              "children": []
+            },
+            {
+              "id": "role-graphic-designer",
+              "name": "Graphic Designer",
+              "type": "role",
+              "description": "Visual design specialist",
+              "responsibilities": ["Visual assets", "Brand consistency"],
+              "children": []
+            },
+            {
+              "id": "role-social-media",
+              "name": "Social Media Manager",
+              "type": "role",
+              "description": "Manages social media presence",
+              "responsibilities": ["Content scheduling", "Engagement tracking"],
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dept-operations",
+      "name": "Operations",
+      "type": "department",
+      "description": "Business operations and administration",
+      "isExpanded": true,
+      "children": [
+        {
+          "id": "role-operations-manager",
+          "name": "Operations Manager",
+          "type": "role",
+          "description": "Manages day-to-day operations",
+          "responsibilities": ["Process optimization", "Resource allocation"],
+          "isExpanded": true,
+          "children": [
+            {
+              "id": "role-admin-assistant",
+              "name": "Administrative Assistant",
+              "type": "role",
+              "description": "Provides administrative support",
+              "responsibilities": ["Scheduling", "Documentation"],
+              "children": []
+            },
+            {
+              "id": "role-office-manager",
+              "name": "Office Manager",
+              "type": "role",
+              "description": "Manages office facilities",
+              "responsibilities": ["Facility maintenance", "Supply management"],
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dept-finance",
+      "name": "Finance",
+      "type": "department",
+      "description": "Financial management and accounting",
+      "isExpanded": true,
+      "children": [
+        {
+          "id": "role-finance-manager",
+          "name": "Finance Manager",
+          "type": "role",
+          "description": "Manages financial operations",
+          "responsibilities": ["Financial reporting", "Budget management"],
+          "isExpanded": true,
+          "children": [
+            {
+              "id": "role-accountant",
+              "name": "Accountant",
+              "type": "role",
+              "description": "Handles accounting tasks",
+              "responsibilities": ["Bookkeeping", "Tax preparation"],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+} 

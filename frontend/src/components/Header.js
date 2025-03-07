@@ -20,6 +20,9 @@ function Header() {
           <Button asChild variant="ghost">
             <Link to="/tasks">Tasks</Link>
           </Button>
+          <Button asChild variant="ghost">
+            <Link to="/organization">Organization</Link>
+          </Button>
         </nav>
       </div>
     </header>

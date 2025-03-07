@@ -1,0 +1,668 @@
+import React, { useState, useCallback, useEffect } from 'react';
+import ReactFlow, {
+  MiniMap,
+  Controls,
+  Background,
+  useNodesState,
+  useEdgesState,
+  addEdge,
+} from 'reactflow';
+import 'reactflow/dist/style.css';
+
+import OrgStructureNode from './OrgStructureNode';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
+import { 
+  createDepartment, 
+  createRole, 
+  createFunction, 
+  getDepartment, 
+  getRole,
+  getRolesByDepartment,
+  getFunctionsByRole,
+  deleteDepartment,
+  deleteRole,
+  deleteFunction,
+  updateDepartment,
+  updateRole,
+  updateFunction
+} from '../../api/organization';
+
+// Define custom node types
+const nodeTypes = {
+  orgNode: OrgStructureNode,
+};
+
+// Default nodes and edges if no data is provided
+const defaultNodes = [
+  {
+    id: 'dept-1',
+    type: 'orgNode',
+    position: { x: 250, y: 0 },
+    data: {
+      label: 'Executive Team',
+      type: 'department',
+      expanded: true,
+      onToggleExpand: () => {},
+      onAddChild: () => {},
+    },
+  },
+];
+
+const defaultEdges = [];
+
+const OrgStructureFlow = ({ initialDepartments = [] }) => {
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [expandedNodes, setExpandedNodes] = useState({});
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [newNodeData, setNewNodeData] = useState({ label: '', description: '', type: 'department' });
+  const [editNodeData, setEditNodeData] = useState({ id: '', label: '', description: '', type: '' });
+  const [selectedParentId, setSelectedParentId] = useState(null);
+  const [nodeToDelete, setNodeToDelete] = useState(null);
+  const [nodeToEdit, setNodeToEdit] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Initialize nodes with API data or defaults
+  useEffect(() => {
+    const initializeNodes = async () => {
+      try {
+        if (initialDepartments && initialDepartments.length > 0) {
+          // Convert API data to React Flow nodes
+          const departmentNodes = initialDepartments.map((dept, index) => ({
+            id: `dept-${dept.id}`,
+            type: 'orgNode',
+            position: { x: 250, y: index * 150 },
+            data: {
+              label: dept.name,
+              description: dept.description || '',
+              type: 'department',
+              expanded: false,
+              onToggleExpand: () => {},
+              onAddChild: () => {},
+              onDelete: () => {},
+              onEdit: () => {},
+              apiId: dept.id
+            },
+          }));
+
+          const nodesWithHandlers = departmentNodes.map(node => ({
+            ...node,
+            data: {
+              ...node.data,
+              onToggleExpand: () => handleToggleExpand(node.id),
+              onAddChild: () => handleAddChild(node.id),
+              onDelete: () => handleDeleteNode(node.id),
+              onEdit: () => handleEditNode(node.id),
+            },
+          }));
+          
+          setNodes(nodesWithHandlers);
+          
+          // Initialize expanded state
+          const expanded = {};
+          departmentNodes.forEach(node => {
+            expanded[node.id] = false;
+          });
+          setExpandedNodes(expanded);
+        } else {
+          // Use default nodes if no API data
+          const nodesWithHandlers = defaultNodes.map(node => ({
+            ...node,
+            data: {
+              ...node.data,
+              onToggleExpand: () => handleToggleExpand(node.id),
+              onAddChild: () => handleAddChild(node.id),
+              onDelete: () => handleDeleteNode(node.id),
+              onEdit: () => handleEditNode(node.id),
+            },
+          }));
+          
+          setNodes(nodesWithHandlers);
+          setEdges(defaultEdges);
+          
+          // Initialize expanded state
+          const expanded = {};
+          defaultNodes.forEach(node => {
+            expanded[node.id] = node.data.expanded;
+          });
+          setExpandedNodes(expanded);
+        }
+      } catch (error) {
+        console.error('Error initializing nodes:', error);
+      }
+    };
+
+    initializeNodes();
+  }, [initialDepartments]);
+
+  // Handle connection between nodes
+  const onConnect = useCallback(
+    (params) => setEdges((eds) => addEdge(params, eds)),
+    [setEdges]
+  );
+
+  // Toggle node expansion and load child nodes if needed
+  const handleToggleExpand = async (nodeId) => {
+    setExpandedNodes(prev => {
+      const newState = { ...prev, [nodeId]: !prev[nodeId] };
+      
+      // Update nodes with new expanded state
+      setNodes(nds => 
+        nds.map(node => {
+          if (node.id === nodeId) {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                expanded: newState[nodeId],
+              },
+            };
+          }
+          return node;
+        })
+      );
+      
+      return newState;
+    });
+
+    // If expanding, fetch child nodes from API
+    const isExpanding = !expandedNodes[nodeId];
+    if (isExpanding) {
+      try {
+        setIsLoading(true);
+        const node = nodes.find(n => n.id === nodeId);
+        
+        if (node) {
+          const nodeType = node.data.type;
+          const apiId = node.data.apiId;
+          
+          if (nodeType === 'department') {
+            // Fetch roles for this department
+            const roles = await getRolesByDepartment(apiId);
+            
+            if (roles && roles.length > 0) {
+              // Create role nodes
+              const roleNodes = roles.map((role, index) => ({
+                id: `role-${role.id}`,
+                type: 'orgNode',
+                position: { 
+                  x: node.position.x + (index - roles.length / 2) * 150, 
+                  y: node.position.y + 150 
+                },
+                data: {
+                  label: role.name,
+                  description: role.description || '',
+                  type: 'role',
+                  expanded: false,
+                  onToggleExpand: () => handleToggleExpand(`role-${role.id}`),
+                  onAddChild: () => handleAddChild(`role-${role.id}`),
+                  onDelete: () => handleDeleteNode(`role-${role.id}`),
+                  onEdit: () => handleEditNode(`role-${role.id}`),
+                  apiId: role.id
+                },
+              }));
+              
+              // Create edges from department to roles
+              const roleEdges = roles.map(role => ({
+                id: `e-${nodeId}-role-${role.id}`,
+                source: nodeId,
+                target: `role-${role.id}`,
+              }));
+              
+              // Add new nodes and edges
+              setNodes(nds => [...nds, ...roleNodes]);
+              setEdges(eds => [...eds, ...roleEdges]);
+              
+              // Initialize expanded state for new nodes
+              setExpandedNodes(prev => {
+                const newState = { ...prev };
+                roleNodes.forEach(node => {
+                  newState[node.id] = false;
+                });
+                return newState;
+              });
+            }
+          } else if (nodeType === 'role') {
+            // Fetch functions for this role
+            const functions = await getFunctionsByRole(apiId);
+            
+            if (functions && functions.length > 0) {
+              // Create function nodes
+              const functionNodes = functions.map((func, index) => ({
+                id: `func-${func.id}`,
+                type: 'orgNode',
+                position: { 
+                  x: node.position.x + (index - functions.length / 2) * 150, 
+                  y: node.position.y + 150 
+                },
+                data: {
+                  label: func.name,
+                  description: func.description || '',
+                  type: 'function',
+                  expanded: false,
+                  onToggleExpand: () => {},
+                  onAddChild: () => {},
+                  onDelete: () => handleDeleteNode(`func-${func.id}`),
+                  onEdit: () => handleEditNode(`func-${func.id}`),
+                  apiId: func.id
+                },
+              }));
+              
+              // Create edges from role to functions
+              const functionEdges = functions.map(func => ({
+                id: `e-${nodeId}-func-${func.id}`,
+                source: nodeId,
+                target: `func-${func.id}`,
+              }));
+              
+              // Add new nodes and edges
+              setNodes(nds => [...nds, ...functionNodes]);
+              setEdges(eds => [...eds, ...functionEdges]);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading child nodes:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  };
+
+  // Open dialog to add a child node
+  const handleAddChild = (parentId) => {
+    const parentNode = nodes.find(n => n.id === parentId);
+    
+    // Determine what type of child to add based on parent type
+    let childType = 'role';
+    if (parentNode.data.type === 'role') {
+      childType = 'function';
+    }
+    
+    setNewNodeData({ label: '', description: '', type: childType });
+    setSelectedParentId(parentId);
+    setIsAddDialogOpen(true);
+  };
+
+  // Add a new node to the graph and save to API
+  const handleAddNode = async () => {
+    if (!newNodeData.label.trim()) return;
+    
+    try {
+      setIsLoading(true);
+      const parentNode = nodes.find(n => n.id === selectedParentId);
+      const parentPos = parentNode.position;
+      const parentType = parentNode.data.type;
+      const parentApiId = parentNode.data.apiId;
+      
+      let newApiNode;
+      
+      // Create the node in the API based on type
+      if (newNodeData.type === 'department') {
+        newApiNode = await createDepartment({
+          name: newNodeData.label,
+          description: newNodeData.description
+        });
+      } else if (newNodeData.type === 'role') {
+        newApiNode = await createRole({
+          name: newNodeData.label,
+          description: newNodeData.description,
+          department_id: parentApiId
+        });
+      } else if (newNodeData.type === 'function') {
+        newApiNode = await createFunction({
+          name: newNodeData.label,
+          description: newNodeData.description,
+          role_id: parentApiId
+        });
+      }
+      
+      if (newApiNode) {
+        // Generate a unique ID for the new node
+        const nodeType = newNodeData.type;
+        const newNodeId = `${nodeType}-${newApiNode.id}`;
+        
+        // Calculate position for the new node
+        const childrenCount = edges.filter(e => e.source === selectedParentId).length;
+        const xOffset = childrenCount * 150 - 150;
+        const yPos = parentPos.y + 150;
+        
+        // Create the new node
+        const newNode = {
+          id: newNodeId,
+          type: 'orgNode',
+          position: { x: parentPos.x + xOffset, y: yPos },
+          data: {
+            label: newNodeData.label,
+            description: newNodeData.description,
+            type: nodeType,
+            expanded: false,
+            onToggleExpand: () => handleToggleExpand(newNodeId),
+            onAddChild: () => handleAddChild(newNodeId),
+            onDelete: () => handleDeleteNode(newNodeId),
+            onEdit: () => handleEditNode(newNodeId),
+            apiId: newApiNode.id
+          },
+        };
+        
+        // Create a new edge connecting parent to child
+        const newEdge = {
+          id: `e-${selectedParentId}-${newNodeId}`,
+          source: selectedParentId,
+          target: newNodeId,
+        };
+        
+        setNodes(nds => [...nds, newNode]);
+        setEdges(eds => [...eds, newEdge]);
+        setExpandedNodes(prev => ({ ...prev, [newNodeId]: false }));
+      }
+    } catch (error) {
+      console.error('Error adding node:', error);
+    } finally {
+      setIsLoading(false);
+      setIsAddDialogOpen(false);
+      setNewNodeData({ label: '', description: '', type: 'department' });
+    }
+  };
+
+  // Open delete confirmation dialog
+  const handleDeleteNode = (nodeId) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (node) {
+      setNodeToDelete(node);
+      setIsDeleteDialogOpen(true);
+    }
+  };
+
+  // Confirm and execute node deletion
+  const confirmDeleteNode = async () => {
+    if (!nodeToDelete) return;
+    
+    try {
+      setIsLoading(true);
+      const nodeId = nodeToDelete.id;
+      const nodeType = nodeToDelete.data.type;
+      const apiId = nodeToDelete.data.apiId;
+      
+      // Delete from API based on node type
+      if (nodeType === 'department') {
+        await deleteDepartment(apiId);
+      } else if (nodeType === 'role') {
+        await deleteRole(apiId);
+      } else if (nodeType === 'function') {
+        await deleteFunction(apiId);
+      }
+      
+      // Find all child edges
+      const childEdges = edges.filter(e => e.source === nodeId);
+      
+      // Find all child nodes (direct children)
+      const childNodeIds = childEdges.map(e => e.target);
+      
+      // Recursively delete all descendants
+      for (const childId of childNodeIds) {
+        const childNode = nodes.find(n => n.id === childId);
+        if (childNode) {
+          const childType = childNode.data.type;
+          const childApiId = childNode.data.apiId;
+          
+          // Delete child from API
+          if (childType === 'department') {
+            await deleteDepartment(childApiId);
+          } else if (childType === 'role') {
+            await deleteRole(childApiId);
+          } else if (childType === 'function') {
+            await deleteFunction(childApiId);
+          }
+        }
+      }
+      
+      // Remove the node and its edges from the graph
+      setNodes(nds => nds.filter(n => n.id !== nodeId && !childNodeIds.includes(n.id)));
+      setEdges(eds => eds.filter(e => e.source !== nodeId && e.target !== nodeId && !childNodeIds.includes(e.source) && !childNodeIds.includes(e.target)));
+      
+      // Remove from expanded state
+      setExpandedNodes(prev => {
+        const newState = { ...prev };
+        delete newState[nodeId];
+        childNodeIds.forEach(id => delete newState[id]);
+        return newState;
+      });
+      
+    } catch (error) {
+      console.error('Error deleting node:', error);
+    } finally {
+      setIsLoading(false);
+      setIsDeleteDialogOpen(false);
+      setNodeToDelete(null);
+    }
+  };
+
+  // Open edit dialog for a node
+  const handleEditNode = (nodeId) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (node) {
+      setNodeToEdit(node);
+      setEditNodeData({
+        id: nodeId,
+        label: node.data.label,
+        description: node.data.description || '',
+        type: node.data.type,
+        apiId: node.data.apiId
+      });
+      setIsEditDialogOpen(true);
+    }
+  };
+
+  // Save edited node
+  const handleSaveEdit = async () => {
+    if (!editNodeData.label.trim() || !nodeToEdit) return;
+    
+    try {
+      setIsLoading(true);
+      const nodeType = editNodeData.type;
+      const apiId = editNodeData.apiId;
+      
+      let updatedApiNode;
+      
+      // Update the node in the API based on type
+      if (nodeType === 'department') {
+        updatedApiNode = await updateDepartment(apiId, {
+          name: editNodeData.label,
+          description: editNodeData.description
+        });
+      } else if (nodeType === 'role') {
+        updatedApiNode = await updateRole(apiId, {
+          name: editNodeData.label,
+          description: editNodeData.description,
+          department_id: nodeToEdit.data.department_id || null
+        });
+      } else if (nodeType === 'function') {
+        updatedApiNode = await updateFunction(apiId, {
+          name: editNodeData.label,
+          description: editNodeData.description,
+          role_id: nodeToEdit.data.role_id || null
+        });
+      }
+      
+      if (updatedApiNode) {
+        // Update the node in the graph
+        setNodes(nds => 
+          nds.map(node => {
+            if (node.id === editNodeData.id) {
+              return {
+                ...node,
+                data: {
+                  ...node.data,
+                  label: editNodeData.label,
+                  description: editNodeData.description
+                },
+              };
+            }
+            return node;
+          })
+        );
+      }
+    } catch (error) {
+      console.error('Error updating node:', error);
+    } finally {
+      setIsLoading(false);
+      setIsEditDialogOpen(false);
+      setNodeToEdit(null);
+      setEditNodeData({ id: '', label: '', description: '', type: '' });
+    }
+  };
+
+  return (
+    <div className="h-[600px] w-full border rounded-md">
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        nodeTypes={nodeTypes}
+        fitView
+      >
+        <Controls />
+        <MiniMap />
+        <Background variant="dots" gap={12} size={1} />
+      </ReactFlow>
+      
+      {/* Add Node Dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New {newNodeData.type}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <label htmlFor="name" className="text-right">
+                Name
+              </label>
+              <Input
+                id="name"
+                value={newNodeData.label}
+                onChange={(e) => setNewNodeData({ ...newNodeData, label: e.target.value })}
+                className="col-span-3"
+                placeholder={`Enter ${newNodeData.type} name`}
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <label htmlFor="description" className="text-right">
+                Description
+              </label>
+              <Input
+                id="description"
+                value={newNodeData.description}
+                onChange={(e) => setNewNodeData({ ...newNodeData, description: e.target.value })}
+                className="col-span-3"
+                placeholder="Optional description"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setIsAddDialogOpen(false);
+                setNewNodeData({ label: '', description: '', type: 'department' });
+              }} 
+              disabled={isLoading}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleAddNode} disabled={isLoading || !newNodeData.label.trim()}>
+              {isLoading ? 'Adding...' : 'Add'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Edit Node Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit {editNodeData.type}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <label htmlFor="edit-name" className="text-right">
+                Name
+              </label>
+              <Input
+                id="edit-name"
+                value={editNodeData.label}
+                onChange={(e) => setEditNodeData({ ...editNodeData, label: e.target.value })}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <label htmlFor="edit-description" className="text-right">
+                Description
+              </label>
+              <Input
+                id="edit-description"
+                value={editNodeData.description}
+                onChange={(e) => setEditNodeData({ ...editNodeData, description: e.target.value })}
+                className="col-span-3"
+                placeholder="Optional description"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={isLoading}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveEdit} disabled={isLoading || !editNodeData.label.trim()}>
+              {isLoading ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-gray-700">
+              Are you sure you want to delete{' '}
+              <span className="font-semibold">{nodeToDelete?.data.label}</span>?
+            </p>
+            {(nodeToDelete?.data.type === 'department' || nodeToDelete?.data.type === 'role') && (
+              <p className="text-red-600 mt-2 text-sm">
+                Warning: This will also delete all child items under this {nodeToDelete?.data.type}.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setIsDeleteDialogOpen(false)} 
+              disabled={isLoading}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={confirmDeleteNode} 
+              disabled={isLoading}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isLoading ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+export default OrgStructureFlow; 
